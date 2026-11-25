@@ -7,6 +7,7 @@ import android.graphics.Bitmap
 import android.location.Location
 import android.net.Uri
 import android.provider.Settings
+import android.text.format.DateFormat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
@@ -20,6 +21,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -39,9 +41,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.LocationOn
-import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -61,34 +61,41 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
 import java.time.ZoneId
 import java.time.ZonedDateTime
+import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
 private val GoldAccent = Color(0xFFE8C266)
 private val DeepObsidian = Color(0xFF10131C)
-private val GlassSurface = Color(0xAA0D111A)
+private val GlassSurface = Color(0xB30D111A)
 private val GlassBorder = Color(0x44FFFFFF)
 
 @Composable
@@ -101,6 +108,13 @@ fun GracelandScreen() {
 
     var measurementSystem by remember { mutableStateOf(preferences.getMeasurementSystem()) }
     var nowInstant by remember { mutableStateOf(ZonedDateTime.now()) }
+    var isPeekingBackground by remember { mutableStateOf(false) }
+
+    val uiAlpha by animateFloatAsState(
+        targetValue = if (isPeekingBackground) 0f else 1f,
+        animationSpec = tween(durationMillis = 160),
+        label = "peekAlpha"
+    )
 
     // Live 1-second clock tick for both Memphis and User Local Time
     LaunchedEffect(Unit) {
@@ -118,10 +132,14 @@ fun GracelandScreen() {
         nowInstant.withZoneSameInstant(userZoneId)
     }
 
-    // Optional manual override to preview Morning/Midday/Dusk/Night photo sets; null = Auto (Memphis time)
-    var periodOverride by remember { mutableStateOf<GracelandMath.TimeOfDayPeriod?>(null) }
-    val activePeriod = periodOverride ?: GracelandMath.periodForHour(memphisTime.hour)
+    val deviceLocale = Locale.getDefault()
+    val use24Hour = DateFormat.is24HourFormat(context)
+    val datePattern = remember(deviceLocale) {
+        DateFormat.getBestDateTimePattern(deviceLocale, "EMMMd")
+    }
 
+    // Background strictly follows the time of day in Memphis
+    val activePeriod = GracelandMath.periodForHour(memphisTime.hour)
     val assetPaths = remember(activePeriod) {
         backgroundRepo.listAssetPaths(activePeriod)
     }
@@ -247,7 +265,7 @@ fun GracelandScreen() {
             }
         }
 
-        // Full-screen crossfading Graceland photo
+        // Full-screen crossfading Graceland photo (always 100% visible)
         Crossfade(
             targetState = activeBitmap,
             animationSpec = tween(durationMillis = 1200),
@@ -274,10 +292,11 @@ fun GracelandScreen() {
             }
         }
 
-        // Scrim overlay for readability across bright and dark photos
+        // Scrim overlay (fades out completely when holding the Eye button)
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .alpha(uiAlpha)
                 .background(
                     Brush.verticalGradient(
                         colorStops = arrayOf(
@@ -295,32 +314,63 @@ fun GracelandScreen() {
             modifier = Modifier
                 .fillMaxSize()
                 .safeDrawingPadding()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween
+                .padding(horizontal = 18.dp, vertical = 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Top Clocks & Unit Switcher
-            TopTimeAndUnitsHud(
-                memphisTime = memphisTime,
-                userLocalTime = userLocalTime,
-                userPlaceLabel = userPlaceLabel,
-                measurementSystem = measurementSystem,
-                onMeasurementSystemChange = { selected ->
-                    measurementSystem = selected
-                    preferences.setMeasurementSystem(selected)
-                }
-            )
+            // Top Two-Line Time Box (Tap to toggle Imperial / Metric distance)
+            Box(modifier = Modifier.alpha(uiAlpha)) {
+                TwoLineTimeBox(
+                    elvisTimeText = GracelandMath.formatDateTimeWithPattern(
+                        dateTime = memphisTime,
+                        datePattern = datePattern,
+                        use24Hour = use24Hour,
+                        locale = deviceLocale
+                    ),
+                    localTimeText = GracelandMath.formatDateTimeWithPattern(
+                        dateTime = userLocalTime,
+                        datePattern = datePattern,
+                        use24Hour = use24Hour,
+                        locale = deviceLocale
+                    ),
+                    userPlaceLabel = userPlaceLabel,
+                    measurementSystem = measurementSystem,
+                    onToggleUnits = {
+                        val next = if (measurementSystem == GracelandMath.MeasurementSystem.IMPERIAL) {
+                            GracelandMath.MeasurementSystem.METRIC
+                        } else {
+                            GracelandMath.MeasurementSystem.IMPERIAL
+                        }
+                        measurementSystem = next
+                        preferences.setMeasurementSystem(next)
+                    }
+                )
+            }
+
+            // Eye-shaped button right below the time box on the right side
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                EyePeekButton(
+                    alpha = uiAlpha,
+                    onPeekStateChange = { peeking -> isPeekingBackground = peeking }
+                )
+            }
 
             // Center Area: Hero Button OR Live Compass + Distance
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .alpha(uiAlpha),
                 contentAlignment = Alignment.Center
             ) {
                 if (!isTracking) {
                     AskGracelandHeroButton(
                         onClick = {
+                            if (isPeekingBackground) return@AskGracelandHeroButton
                             isTracking = true
                             hasLocationPermission = hasAnyLocationPermission(context)
                             if (!hasLocationPermission) {
@@ -358,7 +408,11 @@ fun GracelandScreen() {
                 } else {
                     val (distanceMeters, bearingDeg) = distanceAndBearing
                     CompassDistanceCard(
-                        distanceText = GracelandMath.formatDistance(distanceMeters, measurementSystem),
+                        distanceText = GracelandMath.formatDistance(
+                            distanceMeters = distanceMeters,
+                            system = measurementSystem,
+                            locale = deviceLocale
+                        ),
                         bearingDegrees = bearingDeg,
                         deviceAzimuthDegrees = compassReading.azimuthDegrees,
                         arrowRotationDegrees = animatedArrowRotation,
@@ -369,97 +423,87 @@ fun GracelandScreen() {
                 }
             }
 
-            // Bottom Background Photo Period Pill (allows cycling photos or previewing periods)
-            BackgroundPhotoFooter(
-                period = activePeriod,
-                isAutoPeriod = periodOverride == null,
-                photoIndex = if (assetPaths.isEmpty()) 0 else (photoIndex % assetPaths.size) + 1,
-                photoCount = assetPaths.size,
-                onNextPhoto = {
-                    if (assetPaths.size > 1) {
-                        photoIndex = (photoIndex + 1) % assetPaths.size
-                    }
-                },
-                onCyclePeriodPreview = {
-                    val periods = GracelandMath.TimeOfDayPeriod.entries
-                    periodOverride = when (val current = periodOverride) {
-                        null -> periods.first()
-                        else -> {
-                            val nextIdx = periods.indexOf(current) + 1
-                            if (nextIdx >= periods.size) null else periods[nextIdx]
-                        }
-                    }
-                }
-            )
-        }
-    }
-}
-
-@Composable
-private fun TopTimeAndUnitsHud(
-    memphisTime: ZonedDateTime,
-    userLocalTime: ZonedDateTime,
-    userPlaceLabel: String?,
-    measurementSystem: GracelandMath.MeasurementSystem,
-    onMeasurementSystemChange: (GracelandMath.MeasurementSystem) -> Unit
-) {
-    Surface(
-        shape = RoundedCornerShape(22.dp),
-        color = GlassSurface,
-        border = BorderStroke(1.dp, GlassBorder),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                ClockBlock(
-                    title = "Memphis, TN",
-                    subtitle = "Central • ${GracelandMath.formatDateAndZone(memphisTime)}",
-                    timeText = GracelandMath.formatClockTime(memphisTime, measurementSystem),
-                    accentColor = GoldAccent,
-                    modifier = Modifier.weight(1f)
-                )
-                Box(
-                    modifier = Modifier
-                        .width(1.dp)
-                        .height(54.dp)
-                        .align(Alignment.CenterVertically)
-                        .background(GlassBorder)
-                )
-                ClockBlock(
-                    title = userPlaceLabel ?: "Your Location",
-                    subtitle = GracelandMath.formatDateAndZone(userLocalTime),
-                    timeText = GracelandMath.formatClockTime(userLocalTime, measurementSystem),
-                    accentColor = Color.White,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            // Imperial (mi / 12h) vs Metric (km / 24h) Segmented Switch
-            Row(
+            // Reserved bottom slot for future AdMob Banner Ad (50dp banner + margin)
+            Spacer(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color(0x55000000))
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    .height(58.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun TwoLineTimeBox(
+    elvisTimeText: String,
+    localTimeText: String,
+    userPlaceLabel: String?,
+    measurementSystem: GracelandMath.MeasurementSystem,
+    onToggleUnits: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = GlassSurface,
+        border = BorderStroke(1.dp, GlassBorder),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onToggleUnits)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                UnitToggleChip(
-                    label = "Imperial  (mi • 12h)",
-                    selected = measurementSystem == GracelandMath.MeasurementSystem.IMPERIAL,
-                    onClick = { onMeasurementSystemChange(GracelandMath.MeasurementSystem.IMPERIAL) },
-                    modifier = Modifier.weight(1f)
+                Text(
+                    text = buildAnnotatedString {
+                        withStyle(SpanStyle(color = GoldAccent, fontWeight = FontWeight.Bold)) {
+                            append("Elvis Time: ")
+                        }
+                        withStyle(SpanStyle(color = Color.White, fontWeight = FontWeight.Medium)) {
+                            append(elvisTimeText)
+                        }
+                    },
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-                UnitToggleChip(
-                    label = "Metric  (km • 24h)",
-                    selected = measurementSystem == GracelandMath.MeasurementSystem.METRIC,
-                    onClick = { onMeasurementSystemChange(GracelandMath.MeasurementSystem.METRIC) },
-                    modifier = Modifier.weight(1f)
+
+                val placeSuffix = userPlaceLabel?.let { " ($it)" } ?: ""
+                Text(
+                    text = buildAnnotatedString {
+                        withStyle(SpanStyle(color = GoldAccent.copy(alpha = 0.9f), fontWeight = FontWeight.Bold)) {
+                            append("Local Time: ")
+                        }
+                        withStyle(SpanStyle(color = Color.White.copy(alpha = 0.95f), fontWeight = FontWeight.Medium)) {
+                            append("$localTimeText$placeSuffix")
+                        }
+                    },
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(GoldAccent.copy(alpha = 0.22f))
+                    .border(1.dp, GoldAccent.copy(alpha = 0.55f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (measurementSystem == GracelandMath.MeasurementSystem.IMPERIAL) "MI" else "KM",
+                    color = GoldAccent,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold
                 )
             }
         }
@@ -467,75 +511,57 @@ private fun TopTimeAndUnitsHud(
 }
 
 @Composable
-private fun ClockBlock(
-    title: String,
-    subtitle: String,
-    timeText: String,
-    accentColor: Color,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(2.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Schedule,
-                contentDescription = null,
-                tint = accentColor.copy(alpha = 0.85f),
-                modifier = Modifier.size(13.dp)
-            )
-            Text(
-                text = title,
-                color = Color.White.copy(alpha = 0.85f),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        Text(
-            text = timeText,
-            color = accentColor,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1
-        )
-        Text(
-            text = subtitle,
-            color = Color.White.copy(alpha = 0.65f),
-            fontSize = 11.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@Composable
-private fun UnitToggleChip(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
+private fun EyePeekButton(
+    alpha: Float,
+    onPeekStateChange: (Boolean) -> Unit
 ) {
     Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) GoldAccent else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp, horizontal = 8.dp),
+        modifier = Modifier
+            .alpha(alpha)
+            .size(width = 52.dp, height = 36.dp)
+            .clip(CircleShape)
+            .background(GlassSurface)
+            .border(1.dp, GoldAccent.copy(alpha = 0.75f), CircleShape)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        onPeekStateChange(true)
+                        try {
+                            tryAwaitRelease()
+                        } finally {
+                            onPeekStateChange(false)
+                        }
+                    }
+                )
+            },
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = label,
-            color = if (selected) DeepObsidian else Color.White.copy(alpha = 0.78f),
-            fontSize = 12.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            maxLines = 1
-        )
+        Canvas(modifier = Modifier.size(width = 30.dp, height = 18.dp)) {
+            val w = size.width
+            val h = size.height
+            val cy = h / 2f
+            val eyePath = Path().apply {
+                moveTo(0f, cy)
+                cubicTo(w * 0.24f, 0f, w * 0.76f, 0f, w, cy)
+                cubicTo(w * 0.76f, h, w * 0.24f, h, 0f, cy)
+                close()
+            }
+            drawPath(
+                path = eyePath,
+                color = GoldAccent,
+                style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+            )
+            drawCircle(
+                color = GoldAccent,
+                radius = h * 0.26f,
+                center = Offset(w / 2f, cy)
+            )
+            drawCircle(
+                color = DeepObsidian,
+                radius = h * 0.09f,
+                center = Offset(w / 2f + h * 0.08f, cy - h * 0.08f)
+            )
+        }
     }
 }
 
@@ -590,9 +616,9 @@ private fun CompassDistanceCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 24.dp),
+                .padding(horizontal = 24.dp, vertical = 22.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
                 text = "GRACELAND • MEMPHIS, TN",
@@ -602,10 +628,9 @@ private fun CompassDistanceCard(
                 letterSpacing = 1.6.sp
             )
 
-            // Live Rotating Compass Arrow
             CompassArrowDial(
                 arrowRotationDegrees = arrowRotationDegrees,
-                modifier = Modifier.size(196.dp)
+                modifier = Modifier.size(188.dp)
             )
 
             Text(
@@ -670,7 +695,6 @@ private fun CompassArrowDial(
             val radius = size.minDimension / 2f
             val center = Offset(size.width / 2f, size.height / 2f)
 
-            // Outer translucent dial background & gold ring
             drawCircle(
                 color = Color(0x66090C12),
                 radius = radius * 0.94f,
@@ -683,7 +707,6 @@ private fun CompassArrowDial(
                 style = Stroke(width = 3.dp.toPx())
             )
 
-            // 12 dial tick marks around the perimeter
             for (i in 0 until 12) {
                 val angleRad = Math.toRadians((i * 30).toDouble())
                 val innerR = if (i % 3 == 0) radius * 0.80f else radius * 0.86f
@@ -705,7 +728,6 @@ private fun CompassArrowDial(
                 )
             }
 
-            // Rotating Graceland Arrow
             rotate(degrees = arrowRotationDegrees, pivot = center) {
                 val tipY = center.y - radius * 0.68f
                 val tailY = center.y + radius * 0.48f
@@ -727,7 +749,6 @@ private fun CompassArrowDial(
                 )
             }
 
-            // Center pivot dot
             drawCircle(
                 color = DeepObsidian,
                 radius = 7.dp.toPx(),
@@ -831,54 +852,6 @@ private fun PermissionPromptCard(
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun BackgroundPhotoFooter(
-    period: GracelandMath.TimeOfDayPeriod,
-    isAutoPeriod: Boolean,
-    photoIndex: Int,
-    photoCount: Int,
-    onNextPhoto: () -> Unit,
-    onCyclePeriodPreview: () -> Unit
-) {
-    Surface(
-        shape = CircleShape,
-        color = GlassSurface,
-        border = BorderStroke(1.dp, GlassBorder)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.PhotoLibrary,
-                contentDescription = null,
-                tint = GoldAccent,
-                modifier = Modifier.size(16.dp)
-            )
-            val modeLabel = if (isAutoPeriod) "${period.displayName} in Memphis" else "${period.displayName} (Preview)"
-            val countLabel = if (photoCount > 0) " • $photoIndex/$photoCount" else ""
-            Text(
-                text = "$modeLabel$countLabel",
-                color = Color.White.copy(alpha = 0.88f),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.clickable(enabled = photoCount > 1, onClick = onNextPhoto)
-            )
-            Text(
-                text = "Cycle",
-                color = GoldAccent,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .clickable(onClick = onCyclePeriodPreview)
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
-            )
         }
     }
 }

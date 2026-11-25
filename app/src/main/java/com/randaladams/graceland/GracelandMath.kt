@@ -156,6 +156,24 @@ object GracelandMath {
         }
     }
 
+    fun defaultMeasurementSystemForLocale(locale: Locale = Locale.getDefault()): MeasurementSystem {
+        return when (locale.country.uppercase(Locale.US)) {
+            "US", "GB", "LR", "MM" -> MeasurementSystem.IMPERIAL
+            else -> MeasurementSystem.METRIC
+        }
+    }
+
+    fun formatDateTimeWithPattern(
+        dateTime: ZonedDateTime,
+        datePattern: String,
+        use24Hour: Boolean,
+        locale: Locale = Locale.getDefault()
+    ): String {
+        val timePattern = if (use24Hour) "HH:mm:ss" else "h:mm:ss a"
+        val combinedPattern = "$datePattern, $timePattern"
+        return dateTime.format(DateTimeFormatter.ofPattern(combinedPattern, locale))
+    }
+
     fun formatClockTime(
         dateTime: ZonedDateTime,
         system: MeasurementSystem,
@@ -166,12 +184,5 @@ object GracelandMath {
             MeasurementSystem.METRIC -> "HH:mm:ss"
         }
         return dateTime.format(DateTimeFormatter.ofPattern(pattern, locale))
-    }
-
-    fun formatDateAndZone(
-        dateTime: ZonedDateTime,
-        locale: Locale = Locale.US
-    ): String {
-        return dateTime.format(DateTimeFormatter.ofPattern("EEE, MMM d • z", locale))
     }
 }

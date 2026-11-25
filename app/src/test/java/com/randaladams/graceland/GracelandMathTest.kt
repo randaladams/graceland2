@@ -61,6 +61,27 @@ class GracelandMathTest {
         assertEquals("10.0 km", GracelandMath.formatDistance(10_000.0, GracelandMath.MeasurementSystem.METRIC, Locale.US))
         assertEquals("6.2 mi", GracelandMath.formatDistance(10_000.0, GracelandMath.MeasurementSystem.IMPERIAL, Locale.US))
         assertEquals("328 ft", GracelandMath.formatDistance(100.0, GracelandMath.MeasurementSystem.IMPERIAL, Locale.US))
+        assertEquals("7 ft", GracelandMath.formatDistance(2.0, GracelandMath.MeasurementSystem.IMPERIAL, Locale.US))
+        assertEquals("5,282 mi", GracelandMath.formatDistance(8_500_000.0, GracelandMath.MeasurementSystem.IMPERIAL, Locale.US))
+    }
+
+    @Test
+    fun defaultMeasurementSystem_matchesLocale() {
+        assertEquals(GracelandMath.MeasurementSystem.IMPERIAL, GracelandMath.defaultMeasurementSystemForLocale(Locale.US))
+        assertEquals(GracelandMath.MeasurementSystem.METRIC, GracelandMath.defaultMeasurementSystemForLocale(Locale.FRANCE))
+    }
+
+    @Test
+    fun formatDateTimeWithPattern_respectsPhone24HourAndPattern() {
+        val memphis = ZonedDateTime.of(2026, 7, 4, 20, 15, 5, 0, ZoneId.of("America/Chicago"))
+        assertEquals(
+            "Sat, Jul 4, 8:15:05 PM",
+            GracelandMath.formatDateTimeWithPattern(memphis, "EEE, MMM d", use24Hour = false, locale = Locale.US)
+        )
+        assertEquals(
+            "Sat, 4 Jul, 20:15:05",
+            GracelandMath.formatDateTimeWithPattern(memphis, "EEE, d MMM", use24Hour = true, locale = Locale.UK)
+        )
     }
 
     @Test
