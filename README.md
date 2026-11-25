@@ -1,5 +1,7 @@
 # How Far Is Graceland?
 
+**[Download Latest Android Debug APK (`graceland-debug.apk`)](https://github.com/randaladams/graceland2/releases/latest/download/graceland-debug.apk)**
+
 An Android app (Kotlin + Jetpack Compose) that displays full-screen rotating photos of Graceland based on the time of day in Memphis, shows live clocks for Memphis (Central Time) and your local time zone, and calculates the real-time distance and live compass direction to Graceland (`35.046000, -90.022904`).
 
 ## Features
@@ -22,8 +24,8 @@ To add more photos, upload `.jpg`, `.jpeg`, `.png`, or `.webp` files into any of
 
 ## Building & Downloading the APK on GitHub
 
-Every push to `main` (or manual run from the **Actions** tab) compiles the Android app in GitHub Actions:
+Every push to `main` (or manual run from the **Actions** tab) compiles the Android app in GitHub Actions and updates the direct APK download:
 
-1. Open the **Actions** tab in your GitHub repository.
-2. Click the latest **Build Android APK** workflow run.
-3. Download the **`graceland-debug-apk`** artifact (`app-debug.apk`) and install it on your Android device.
+- **Direct APK download**: [graceland-debug.apk](https://github.com/randaladams/graceland2/releases/latest/download/graceland-debug.apk)
+- **Releases page**: https://github.com/randaladams/graceland2/releases
+- **Workflow artifacts**: Also available as `graceland-debug-apk` under the **Actions** tab.
