@@ -41,7 +41,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.LocationOn
-import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -54,6 +53,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -74,13 +74,13 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -163,7 +163,6 @@ fun GracelandScreen() {
     }
     var permissionDeniedOnce by remember { mutableStateOf(false) }
     var currentLocation by remember { mutableStateOf<Location?>(null) }
-    var userPlaceLabel by remember { mutableStateOf<String?>(null) }
     var compassReading by remember {
         mutableStateOf(CompassReading(azimuthDegrees = 0.0, lowAccuracy = false, hasSensor = true))
     }
@@ -184,14 +183,6 @@ fun GracelandScreen() {
             locationTracker.observeLocation().collect { loc ->
                 currentLocation = loc
             }
-        }
-    }
-
-    LaunchedEffect(currentLocation?.latitude, currentLocation?.longitude) {
-        val loc = currentLocation ?: return@LaunchedEffect
-        val resolved = locationTracker.resolvePlaceLabel(loc.latitude, loc.longitude)
-        if (!resolved.isNullOrBlank()) {
-            userPlaceLabel = resolved
         }
     }
 
@@ -332,7 +323,6 @@ fun GracelandScreen() {
                         use24Hour = use24Hour,
                         locale = deviceLocale
                     ),
-                    userPlaceLabel = userPlaceLabel,
                     measurementSystem = measurementSystem,
                     onToggleUnits = {
                         val next = if (measurementSystem == GracelandMath.MeasurementSystem.IMPERIAL) {
@@ -417,8 +407,7 @@ fun GracelandScreen() {
                         deviceAzimuthDegrees = compassReading.azimuthDegrees,
                         arrowRotationDegrees = animatedArrowRotation,
                         hasCompassSensor = compassReading.hasSensor,
-                        lowCompassAccuracy = compassReading.lowAccuracy,
-                        onReset = { isTracking = false }
+                        lowCompassAccuracy = compassReading.lowAccuracy
                     )
                 }
             }
@@ -437,7 +426,6 @@ fun GracelandScreen() {
 private fun TwoLineTimeBox(
     elvisTimeText: String,
     localTimeText: String,
-    userPlaceLabel: String?,
     measurementSystem: GracelandMath.MeasurementSystem,
     onToggleUnits: () -> Unit
 ) {
@@ -453,41 +441,25 @@ private fun TwoLineTimeBox(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 11.dp),
+                .padding(horizontal = 12.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text(
-                    text = buildAnnotatedString {
-                        withStyle(SpanStyle(color = GoldAccent, fontWeight = FontWeight.Bold)) {
-                            append("Elvis Time: ")
-                        }
-                        withStyle(SpanStyle(color = Color.White, fontWeight = FontWeight.Medium)) {
-                            append(elvisTimeText)
-                        }
-                    },
-                    fontSize = 14.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                AutoFitTimeLine(
+                    label = "Elvis Time: ",
+                    value = elvisTimeText,
+                    labelColor = GoldAccent,
+                    valueColor = Color.White
                 )
-
-                val placeSuffix = userPlaceLabel?.let { " ($it)" } ?: ""
-                Text(
-                    text = buildAnnotatedString {
-                        withStyle(SpanStyle(color = GoldAccent.copy(alpha = 0.9f), fontWeight = FontWeight.Bold)) {
-                            append("Local Time: ")
-                        }
-                        withStyle(SpanStyle(color = Color.White.copy(alpha = 0.95f), fontWeight = FontWeight.Medium)) {
-                            append("$localTimeText$placeSuffix")
-                        }
-                    },
-                    fontSize = 14.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                AutoFitTimeLine(
+                    label = "Local Time: ",
+                    value = localTimeText,
+                    labelColor = GoldAccent.copy(alpha = 0.9f),
+                    valueColor = Color.White.copy(alpha = 0.95f)
                 )
             }
 
@@ -496,7 +468,7 @@ private fun TwoLineTimeBox(
                     .clip(RoundedCornerShape(8.dp))
                     .background(GoldAccent.copy(alpha = 0.22f))
                     .border(1.dp, GoldAccent.copy(alpha = 0.55f), RoundedCornerShape(8.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                    .padding(horizontal = 7.dp, vertical = 4.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -508,6 +480,42 @@ private fun TwoLineTimeBox(
             }
         }
     }
+}
+
+@Composable
+private fun AutoFitTimeLine(
+    label: String,
+    value: String,
+    labelColor: Color,
+    valueColor: Color
+) {
+    val fontScale = LocalDensity.current.fontScale
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    var fontSizeSp by remember(fontScale, screenWidthDp) { mutableFloatStateOf(14f) }
+    var allowWrap by remember(fontScale, screenWidthDp) { mutableStateOf(false) }
+
+    Text(
+        text = buildAnnotatedString {
+            withStyle(SpanStyle(color = labelColor, fontWeight = FontWeight.Bold)) {
+                append(label)
+            }
+            withStyle(SpanStyle(color = valueColor, fontWeight = FontWeight.Medium)) {
+                append(value)
+            }
+        },
+        fontSize = fontSizeSp.sp,
+        softWrap = allowWrap,
+        maxLines = if (allowWrap) 2 else 1,
+        onTextLayout = { result ->
+            if (!allowWrap && result.didOverflowWidth) {
+                if (fontSizeSp > 8.5f) {
+                    fontSizeSp = (fontSizeSp - 0.5f).coerceAtLeast(8.5f)
+                } else {
+                    allowWrap = true
+                }
+            }
+        }
+    )
 }
 
 @Composable
@@ -604,8 +612,7 @@ private fun CompassDistanceCard(
     deviceAzimuthDegrees: Double,
     arrowRotationDegrees: Float,
     hasCompassSensor: Boolean,
-    lowCompassAccuracy: Boolean,
-    onReset: () -> Unit
+    lowCompassAccuracy: Boolean
 ) {
     Surface(
         shape = RoundedCornerShape(28.dp),
@@ -644,9 +651,9 @@ private fun CompassDistanceCard(
             val bearingCardinal = GracelandMath.compassCardinal(bearingDegrees)
             val headingCardinal = GracelandMath.compassCardinal(deviceAzimuthDegrees)
             val subtitle = if (hasCompassSensor) {
-                "Bearing ${bearingDegrees.roundToInt()}° $bearingCardinal  •  Phone facing ${deviceAzimuthDegrees.roundToInt()}° $headingCardinal"
+                "Bearing ${bearingDegrees.roundToInt()}° $bearingCardinal  •  Facing ${deviceAzimuthDegrees.roundToInt()}° $headingCardinal"
             } else {
-                "Bearing ${bearingDegrees.roundToInt()}° $bearingCardinal  •  No compass sensor on device"
+                "Bearing ${bearingDegrees.roundToInt()}° $bearingCardinal  •  No compass sensor"
             }
             Text(
                 text = subtitle,
@@ -662,21 +669,6 @@ private fun CompassDistanceCard(
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center
                 )
-            }
-
-            OutlinedButton(
-                onClick = onReset,
-                shape = CircleShape,
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.Refresh,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(text = "Hide Compass", fontSize = 13.sp)
             }
         }
     }

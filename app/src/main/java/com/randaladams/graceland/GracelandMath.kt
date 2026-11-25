@@ -169,7 +169,7 @@ object GracelandMath {
         use24Hour: Boolean,
         locale: Locale = Locale.getDefault()
     ): String {
-        val timePattern = if (use24Hour) "HH:mm:ss" else "h:mm:ss a"
+        val timePattern = if (use24Hour) "HH:mm" else "h:mm a"
         val combinedPattern = "$datePattern, $timePattern"
         return dateTime.format(DateTimeFormatter.ofPattern(combinedPattern, locale))
     }

@@ -75,11 +75,11 @@ class GracelandMathTest {
     fun formatDateTimeWithPattern_respectsPhone24HourAndPattern() {
         val memphis = ZonedDateTime.of(2026, 7, 4, 20, 15, 5, 0, ZoneId.of("America/Chicago"))
         assertEquals(
-            "Sat, Jul 4, 8:15:05 PM",
+            "Sat, Jul 4, 8:15 PM",
             GracelandMath.formatDateTimeWithPattern(memphis, "EEE, MMM d", use24Hour = false, locale = Locale.US)
         )
         assertEquals(
-            "Sat, 4 Jul, 20:15:05",
+            "Sat, 4 Jul, 20:15",
             GracelandMath.formatDateTimeWithPattern(memphis, "EEE, d MMM", use24Hour = true, locale = Locale.UK)
         )
     }
