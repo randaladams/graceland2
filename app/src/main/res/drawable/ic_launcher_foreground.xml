@@ -1,0 +1,20 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Gold compass ring -->
+    <path
+        android:pathData="M54,24 A30,30 0 1,1 53.99,24 Z"
+        android:strokeColor="#E8C266"
+        android:strokeWidth="3.5"
+        android:fillColor="#00000000" />
+    <!-- North-pointing needle -->
+    <path
+        android:fillColor="#E8C266"
+        android:pathData="M54,30 L63,56 L54,50 L45,56 Z" />
+    <!-- South tail -->
+    <path
+        android:fillColor="#8C7338"
+        android:pathData="M54,78 L61,56 L54,52 L47,56 Z" />
+</vector>
