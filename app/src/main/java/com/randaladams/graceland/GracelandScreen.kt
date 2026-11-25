@@ -90,7 +90,6 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.util.Locale
 import kotlin.math.cos
-import kotlin.math.roundToInt
 import kotlin.math.sin
 
 private val GoldAccent = Color(0xFFE8C266)
@@ -396,15 +395,13 @@ fun GracelandScreen() {
                 } else if (distanceAndBearing == null) {
                     LocatingCard(onCancel = { isTracking = false })
                 } else {
-                    val (distanceMeters, bearingDeg) = distanceAndBearing
+                    val (distanceMeters, _) = distanceAndBearing
                     CompassDistanceCard(
                         distanceText = GracelandMath.formatDistance(
                             distanceMeters = distanceMeters,
                             system = measurementSystem,
                             locale = deviceLocale
                         ),
-                        bearingDegrees = bearingDeg,
-                        deviceAzimuthDegrees = compassReading.azimuthDegrees,
                         arrowRotationDegrees = animatedArrowRotation,
                         hasCompassSensor = compassReading.hasSensor,
                         lowCompassAccuracy = compassReading.lowAccuracy
@@ -608,8 +605,6 @@ private fun AskGracelandHeroButton(onClick: () -> Unit) {
 @Composable
 private fun CompassDistanceCard(
     distanceText: String,
-    bearingDegrees: Double,
-    deviceAzimuthDegrees: Double,
     arrowRotationDegrees: Float,
     hasCompassSensor: Boolean,
     lowCompassAccuracy: Boolean
@@ -648,21 +643,14 @@ private fun CompassDistanceCard(
                 textAlign = TextAlign.Center
             )
 
-            val bearingCardinal = GracelandMath.compassCardinal(bearingDegrees)
-            val headingCardinal = GracelandMath.compassCardinal(deviceAzimuthDegrees)
-            val subtitle = if (hasCompassSensor) {
-                "Bearing ${bearingDegrees.roundToInt()}° $bearingCardinal  •  Facing ${deviceAzimuthDegrees.roundToInt()}° $headingCardinal"
-            } else {
-                "Bearing ${bearingDegrees.roundToInt()}° $bearingCardinal  •  No compass sensor"
-            }
-            Text(
-                text = subtitle,
-                color = Color.White.copy(alpha = 0.8f),
-                fontSize = 13.sp,
-                textAlign = TextAlign.Center
-            )
-
-            if (lowCompassAccuracy && hasCompassSensor) {
+            if (!hasCompassSensor) {
+                Text(
+                    text = "No compass sensor on device",
+                    color = Color.White.copy(alpha = 0.75f),
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center
+                )
+            } else if (lowCompassAccuracy) {
                 Text(
                     text = "Tip: Move phone in a figure-8 to calibrate compass",
                     color = GoldAccent.copy(alpha = 0.9f),
