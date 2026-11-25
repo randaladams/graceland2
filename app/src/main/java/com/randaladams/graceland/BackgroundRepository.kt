@@ -16,13 +16,27 @@ class BackgroundRepository(private val context: Context) {
 
     fun listAssetPaths(period: GracelandMath.TimeOfDayPeriod): List<String> {
         val folder = "backgrounds/${period.folderName}"
-        val files = context.assets.list(folder)?.sorted().orEmpty()
-        return files
-            .filter { fileName ->
-                val ext = fileName.substringAfterLast('.', "").lowercase()
-                ext in supportedExtensions
-            }
+        val folderAssets = context.assets.list(folder)
+            ?.sorted()
+            .orEmpty()
+            .filter(::isSupportedImage)
             .map { "$folder/$it" }
+
+        val rootPrefixAssets = context.assets.list("backgrounds")
+            ?.sorted()
+            .orEmpty()
+            .filter { fileName ->
+                isSupportedImage(fileName) &&
+                    fileName.lowercase().contains(period.folderName)
+            }
+            .map { "backgrounds/$it" }
+
+        return (folderAssets + rootPrefixAssets).distinct()
+    }
+
+    private fun isSupportedImage(fileName: String): Boolean {
+        val ext = fileName.substringAfterLast('.', "").lowercase()
+        return ext in supportedExtensions
     }
 
     suspend fun loadScaledBitmap(

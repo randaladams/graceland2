@@ -11,14 +11,14 @@ An Android app (Kotlin + Jetpack Compose) that displays full-screen rotating pho
 
 ## Adding Your Own Graceland Photos
 
-Starter placeholder images are included so the app builds and runs immediately. To use your own photos, upload `.jpg`, `.jpeg`, `.png`, or `.webp` files into these folders:
+Your Graceland photos are bundled in these time-of-day folders:
 
 - `app/src/main/assets/backgrounds/morning/`
 - `app/src/main/assets/backgrounds/midday/`
 - `app/src/main/assets/backgrounds/dusk/`
 - `app/src/main/assets/backgrounds/night/`
 
-You can delete the starter `*_1.png` / `*_2.png` files once your photos are uploaded. Any filename works — the app automatically discovers and rotates through all images in each folder.
+To add more photos, upload `.jpg`, `.jpeg`, `.png`, or `.webp` files into any of those folders (or place files named with `morning`, `midday`, `dusk`, or `night` directly in `app/src/main/assets/backgrounds/`). The app automatically discovers and rotates through all matching images based on the current time in Memphis (`America/Chicago`).
 
 ## Building & Downloading the APK on GitHub
 
